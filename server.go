@@ -12,8 +12,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-var e = echo.New()
-
 func login(c *echo.Context) error {
 	name, password := c.FormValue("name"), c.FormValue("password")
 
@@ -234,8 +232,12 @@ func recommend(c *echo.Context) error {
 }
 
 func main() {
-	e.Static("/static", "static")
+	var e = echo.New()
+
 	e.Use(middleware.RequestLogger())
+
+	e.Static("/static", "static")
+	e.File("/favicon.ico", "static/favicon.ico")
 
 	e.File("/", "html/index.html")
 	e.File("/error", "html/error.html")
