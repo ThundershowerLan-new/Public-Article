@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人主页 - Public Article</title>
+    <link rel="stylesheet" href="/static/css/public.css">
+</head>
+<body>
+<header>
+    <h1></h1>
+    <nav>
+        <a href="/">Public Article</a> |
+        <a href="/article/0">关于</a> |
+        <a href="/create">创作</a>
+    </nav>
+</header>
+<hr>
+<main>
+</main>
+<hr>
+<footer>
+    <small>Public Article by Thundershower</small>
+</footer>
+</body>
+
+<script>
+    const main = document.getElementsByTagName("main")[0];
+
+    const id = document.location.href.split("/").at(-1);
+    const form = new FormData();
+    form.set("id", id);
+
+    fetch("/user", {
+        method: "POST",
+        body: form
+    })
+        .then(response => response.json())
+        .then(response => {
+            if (response.code === 200) {
+                document.title = `${response.data.name} - Public Article`;
+                document.getElementsByTagName("h1")[0].innerText = response.data.name;
+                for (let index in response.data.articles) {
+                    main.innerHTML += `<a href=\"/article/${response.data.articles[index].id}\">${response.data.articles[index].title}</a><br><br>`;
+                }
+            } else {
+                document.location.href = "/error";
+            }
+        })
+        .catch(error => {
+            if (error !== undefined) {
+                console.error(error);
+            }
+        })
+</script>
+</html>

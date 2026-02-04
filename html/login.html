@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - Public Article</title>
+    <link rel="stylesheet" href="/static/css/public.css">
+</head>
+<body>
+<header>
+    <h1>登录</h1>
+    <nav>
+        <a href="/">Public Article</a> |
+        <a href="/article/0">关于</a>
+    </nav>
+</header>
+<hr>
+<main>
+    <form name="information">
+        <label for="name">名字：</label>
+        <input id="name" type="text" name="name" placeholder="请输入名字">
+        <br><br>
+        <label for="password">密码：</label>
+        <input id="password" type="password" name="password" placeholder="请输入密码">
+        <br><br>
+        <button type="button" onclick="login()">登录/注册</button>
+    </form>
+</main>
+<hr>
+<footer>
+    <small>Public Article by Thundershower</small>
+</footer>
+</body>
+
+<script src="/static/js/cookies.min.js"></script>
+<script>
+    function login() {
+        fetch("/login", {
+            method: "POST",
+            body: new FormData(document.information),
+        })
+            .then(response => response.json())
+            .then(response => {
+                if (response.code === 200 || response.code === 201) {
+                    setCookie("id", response.data.id, 604800)
+                    setCookie("name", response.data.name, 604800)
+                    setCookie("logged", "true")
+                    document.location.href = "/";
+                }
+                window.alert(response.data);
+            })
+            .catch(error => {
+                if (error !== undefined) {
+                    console.error(error);
+                }
+            })
+    }
+</script>
+</html>

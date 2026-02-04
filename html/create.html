@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>创作 - Public Article</title>
+    <link rel="stylesheet" href="/static/css/public.css">
+</head>
+<body>
+<header>
+    <h1>创作</h1>
+    <nav>
+        <a href="/">Public Article</a> |
+        <a href="/article/0">关于</a>
+    </nav>
+</header>
+<hr>
+<main>
+    <form name="article">
+        <label for="title">标题：</label>
+        <input id="title" type="text" name="title" placeholder="请输入标题">
+        <br><br>
+        <label for="body"></label>
+        <textarea id="body" name="body"></textarea>
+        <br><br>
+        <button type="button" onclick="create()">发布</button>
+    </form>
+</main>
+<hr>
+<footer>
+    <small>Public Article by Thundershower</small>
+</footer>
+<dialog>
+    <form name="information" method="dialog">
+        <label for="password">密码：</label>
+        <input id="password" type="password" name="password" placeholder="请输入密码">
+        <br><br>
+        <button type="submit" onclick="login()">发布</button>
+    </form>
+</dialog>
+</body>
+
+<script src="/static/js/cookies.min.js"></script>
+<script>
+    if (getCookie("name") === "" || getCookie("id") === "") {
+        document.location.href = "/login"
+    }
+
+    function create() {
+        if (!getCookie("logged")) {
+            document.information.name.value = getCookie("name");
+            document.getElementsByTagName("dialog")[0].show();
+
+            return
+        }
+
+        const form = new FormData(document.article);
+        form.set("creator", getCookie("id"));
+
+        fetch("/create", {
+            method: "POST",
+            body: form,
+        })
+            .then(response => response.json())
+            .then(response => document.location.href = response.code === 200 ? `/article/${response.data.id}` : "/error")
+            .catch(error => {
+                if (error !== undefined) {
+                    console.error(error);
+                }
+            })
+    }
+
+    function login() {
+        const form = new FormData(document.information);
+        form.set("name", getCookie("name"));
+
+        fetch("/login", {
+            method: "POST",
+            body: form,
+        })
+            .then(response => response.json())
+            .then(response => {
+                if (response.code === 200 || response.code === 201) {
+                    setCookie("id", response.data.id, 604800)
+                    setCookie("name", response.data.name, 604800)
+                    setCookie("logged", "true")
+                    create()
+                } else {
+                    window.alert(response.data);
+                }
+            })
+            .catch(error => {
+                if (error !== undefined) {
+                    console.error(error);
+                }
+            })
+    }
+</script>
+</html>

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Public Article</title>
+    <link rel="stylesheet" href="/static/css/public.css">
+</head>
+<body>
+<header>
+    <h1>Public Article</h1>
+    <nav>
+        <a href="/login">登录</a> |
+        <a href="/article/0">关于</a>
+    </nav>
+</header>
+<hr>
+<main>
+</main>
+<hr>
+<footer>
+    <small>Public Article by Thundershower</small>
+</footer>
+</body>
+
+<script src="/static/js/cookies.min.js"></script>
+<script>
+    const home = document.getElementsByTagName("a")[0];
+    const main = document.getElementsByTagName("main")[0];
+
+    const name = getCookie("name");
+    const id = getCookie("id");
+
+    if (name !== "" && id !== "") {
+        home.innerText = name;
+        home.href = "/user/" + id;
+    }
+
+    fetch("/recommend", {
+        method: "POST",
+    })
+        .then(response => response.json())
+        .then(response => {
+            if (response.code === 200) {
+                for (let index in response.data) {
+                    main.innerHTML += `<a href=\"/article/${response.data[index].id}\">${response.data[index].title}</a><br><br>`
+                }
+            } else {
+                window.alert(response.data)
+            }
+        })
+        .catch(error => {
+            if (error !== undefined) {
+                console.error(error);
+            }
+        })
+</script>
+</html>
