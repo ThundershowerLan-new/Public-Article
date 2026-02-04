@@ -11,8 +11,7 @@
     <h1></h1>
     <nav>
         <a href="/">Public Article</a> |
-        <a href="/article/0">关于</a> |
-        <a href="/create">创作</a>
+        <a href="/article/0">关于</a>
     </nav>
 </header>
 <hr>
@@ -22,12 +21,22 @@
 <footer>
     <small>Public Article by Thundershower</small>
 </footer>
+<dialog>
+    <form name="information" method="dialog">
+        <label for="password">密码：</label>
+        <input id="password" type="password" name="password" placeholder="请输入密码">
+        <br><br>
+        <button type="submit" onclick="login()">登录</button>
+    </form>
+</dialog>
 </body>
 
+<script src="/static/js/cookies.min.js"></script>
 <script>
     const main = document.getElementsByTagName("main")[0];
 
     const id = document.location.href.split("/").at(-1);
+    const own = getCookie("id") === id;
     const form = new FormData();
     form.set("id", id);
 
@@ -41,7 +50,8 @@
                 document.title = `${response.data.name} - Public Article`;
                 document.getElementsByTagName("h1")[0].innerText = response.data.name;
                 for (let index in response.data.articles) {
-                    main.innerHTML += `<a href=\"/article/${response.data.articles[index].id}\">${response.data.articles[index].title}</a><br><br>`;
+                    let article = response.data.articles[index].id;
+                    main.innerHTML += `<a href=\"/article/${article}\">${response.data.articles[index].title}</a> ${own ? `<a onclick="remove(${article})" style="color: red">删除</a>` : ""}<br><br>`;
                 }
             } else {
                 document.location.href = "/error";
@@ -52,5 +62,61 @@
                 console.error(error);
             }
         })
+
+    document.getElementsByTagName("nav")[0].innerHTML += own ? ` |\n<a href="/create">创作</a>` : ` |\n<a href="/user/${getCookie("id")}">${getCookie("name")}</a>`;
+
+    function login() {
+        const form = new FormData(document.information);
+        form.set("name", getCookie("name"));
+
+        fetch("/login", {
+            method: "POST",
+            body: form,
+        })
+            .then(response => response.json())
+            .then(response => {
+                if (response.code === 200 || response.code === 201) {
+                    setCookie("id", response.data.id, 604800)
+                    setCookie("name", response.data.name, 604800)
+                    setCookie("logged", "true")
+                } else {
+                    window.alert(response.data);
+                }
+            })
+            .catch(error => {
+                if (error !== undefined) {
+                    console.error(error);
+                }
+            })
+    }
+
+    function remove(article) {
+        if (!getCookie("logged")) {
+            document.getElementsByTagName("dialog")[0].show();
+
+            return;
+        }
+
+        let form = new FormData();
+        form.set("name", getCookie("name"));
+
+        fetch(`/article/${article}`, {
+            method: "DELETE",
+            body: form
+        })
+            .then(response => response.json())
+            .then(response => {
+                if (response.code === 200) {
+                    document.location.reload();
+                } else {
+                    window.alert(response.data);
+                }
+            })
+            .catch(error => {
+                if (error !== undefined) {
+                    console.error(error);
+                }
+            })
+    }
 </script>
 </html>

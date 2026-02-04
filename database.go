@@ -64,7 +64,7 @@ func verifyUser(name string, password string) (*user, error) {
 	}, nil
 }
 
-func getUser(id uint64) (*user, error) {
+func selectUser(id uint64) (*user, error) {
 	var resultName, resultPassword string
 
 	if err := database.QueryRow("SELECT name, password FROM users WHERE id = ?", id).Scan(&resultName, &resultPassword); err != nil {
@@ -124,7 +124,7 @@ func createArticle(title string, body string, creator uint64) (*article, error) 
 	}, nil
 }
 
-func getArticle(id uint64) (*article, error) {
+func selectArticle(id uint64) (*article, error) {
 	var resultTitle, resultBody string
 	var resultCreator uint64
 
@@ -138,4 +138,12 @@ func getArticle(id uint64) (*article, error) {
 		Body:    resultBody,
 		Creator: resultCreator,
 	}, nil
+}
+
+func deleteArticle(id uint64) error {
+	if _, err := database.Exec("DELETE FROM articles WHERE id = ?", id); err != nil {
+		return err
+	}
+
+	return nil
 }

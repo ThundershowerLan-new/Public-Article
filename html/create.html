@@ -48,7 +48,6 @@
 
     function create() {
         if (!getCookie("logged")) {
-            document.information.name.value = getCookie("name");
             document.getElementsByTagName("dialog")[0].show();
 
             return
@@ -56,6 +55,7 @@
 
         const form = new FormData(document.article);
         form.set("creator", getCookie("id"));
+        form.set("name", getCookie("name"));
 
         fetch("/create", {
             method: "POST",

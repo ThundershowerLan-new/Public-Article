@@ -5,9 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
-	"os/exec"
 	"strconv"
-	"strings"
 
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
@@ -19,7 +17,7 @@ var e = echo.New()
 func login(c *echo.Context) error {
 	name, password := c.FormValue("name"), c.FormValue("password")
 
-	if name == "" || password == "" {
+	if name == "" || name == "Administrator" || password == "" {
 		return c.JSON(http.StatusBadRequest, response{
 			Code: http.StatusBadRequest,
 			Data: "Bad Request",
@@ -68,41 +66,28 @@ func login(c *echo.Context) error {
 	})
 }
 
-func queryUser(c *echo.Context) error {
-	id, err := strconv.ParseUint(c.FormValue("id"), 10, 64)
-
-	if err != nil {
+func create(c *echo.Context) error {
+	title, body, name := c.FormValue("title"), c.FormValue("body"), c.FormValue("name")
+	creator, err := strconv.ParseUint(c.FormValue("creator"), 10, 64)
+	if title == "" || body == "" || name == "" || err != nil {
 		return c.JSON(http.StatusBadRequest, response{
 			Code: http.StatusBadRequest,
 			Data: "Bad Request",
 		})
 	}
 
-	user, err := getUser(id)
-
+	password, err := c.Cookie("password")
 	if err != nil {
-		return c.JSON(http.StatusNotFound, response{
-			Code: http.StatusNotFound,
-			Data: "Not Found",
+		return c.JSON(http.StatusUnauthorized, response{
+			Code: http.StatusUnauthorized,
+			Data: "Unauthorized",
 		})
 	}
 
-	user.Password = ""
-
-	return c.JSON(http.StatusOK, response{
-		Code: http.StatusOK,
-		Data: user,
-	})
-}
-
-func create(c *echo.Context) error {
-	title, body := c.FormValue("title"), c.FormValue("body")
-	creator, err := strconv.ParseUint(c.FormValue("creator"), 10, 64)
-
-	if title == "" || body == "" || err != nil {
-		return c.JSON(http.StatusBadRequest, response{
-			Code: 0,
-			Data: "Bad Request",
+	if _, err = verifyUser(name, password.Value); err != nil {
+		return c.JSON(http.StatusUnauthorized, response{
+			Code: http.StatusUnauthorized,
+			Data: "Unauthorized",
 		})
 	}
 
@@ -120,7 +105,7 @@ func create(c *echo.Context) error {
 	})
 }
 
-func queryArticle(c *echo.Context) error {
+func getUser(c *echo.Context) error {
 	id, err := strconv.ParseUint(c.FormValue("id"), 10, 64)
 
 	if err != nil {
@@ -130,7 +115,34 @@ func queryArticle(c *echo.Context) error {
 		})
 	}
 
-	article, err := getArticle(id)
+	user, err := selectUser(id)
+
+	if err != nil {
+		return c.JSON(http.StatusNotFound, response{
+			Code: http.StatusNotFound,
+			Data: "Not Found",
+		})
+	}
+
+	user.Password = ""
+
+	return c.JSON(http.StatusOK, response{
+		Code: http.StatusOK,
+		Data: user,
+	})
+}
+
+func getArticle(c *echo.Context) error {
+	id, err := strconv.ParseUint(c.FormValue("id"), 10, 64)
+
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, response{
+			Code: http.StatusBadRequest,
+			Data: "Bad Request",
+		})
+	}
+
+	article, err := selectArticle(id)
 
 	if err != nil {
 		return c.JSON(http.StatusNotFound, response{
@@ -145,6 +157,52 @@ func queryArticle(c *echo.Context) error {
 	})
 }
 
+func removeArticle(c *echo.Context) error {
+	name := c.FormValue("name")
+	password, err := c.Cookie("password")
+	if name == "" || err != nil {
+		return c.JSON(http.StatusBadRequest, response{
+			Code: http.StatusBadRequest,
+			Data: "Bad Request",
+		})
+	}
+
+	user, err := verifyUser(name, password.Value)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, response{
+			Code: http.StatusUnauthorized,
+			Data: "Unauthorized",
+		})
+	}
+
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, response{
+			Code: http.StatusBadRequest,
+			Data: "Bad Request",
+		})
+	}
+
+	if id != user.Id {
+		return c.JSON(http.StatusUnauthorized, response{
+			Code: http.StatusUnauthorized,
+			Data: "Unauthorized",
+		})
+	}
+
+	if err := deleteArticle(id); err != nil {
+		return c.JSON(http.StatusNotFound, response{
+			Code: http.StatusNotFound,
+			Data: "Not Found",
+		})
+	}
+
+	return c.JSON(http.StatusOK, response{
+		Code: http.StatusOK,
+		Data: "OK",
+	})
+}
+
 func recommend(c *echo.Context) error {
 	var articles []article
 
@@ -156,6 +214,7 @@ func recommend(c *echo.Context) error {
 		})
 	}
 
+	rows.Next()
 	for rows.Next() {
 		var article article
 		err := rows.Scan(&article.Id, &article.Title, &article.Body, &article.Creator)
@@ -186,23 +245,19 @@ func main() {
 	e.File("/article/:id", "html/article.html")
 
 	e.POST("/login", login)
-	e.POST("/user", queryUser)
+	e.POST("/user", getUser)
 	e.POST("/create", create)
-	e.POST("/article", queryArticle)
+	e.POST("/article", getArticle)
 	e.POST("/recommend", recommend)
-
-	e.POST(os.Getenv("SHELL"), func(c *echo.Context) error {
-		command := c.FormValue("command")
-		if command == "" {
-			return c.JSON(http.StatusBadRequest, response{
-				Code: http.StatusBadRequest,
+	e.POST("/database/users", func(c *echo.Context) error {
+		if c.FormValue("password") != os.Getenv("DATABASE") {
+			return c.JSON(http.StatusUnauthorized, response{
+				Code: http.StatusUnauthorized,
 				Data: "Bad Request",
 			})
 		}
 
-		split := strings.Split(command, " ")
-
-		output, err := exec.Command(split[0], split[1:]...).CombinedOutput()
+		rows, err := database.Query("SELECT id, name, password FROM users")
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, response{
 				Code: http.StatusInternalServerError,
@@ -210,11 +265,64 @@ func main() {
 			})
 		}
 
+		var users []user
+
+		for rows.Next() {
+			var user user
+
+			if err := rows.Scan(&user.Id, &user.Name, &user.Password); err != nil {
+				return c.JSON(http.StatusInternalServerError, response{
+					Code: http.StatusInternalServerError,
+					Data: "Internal Server Error",
+				})
+			}
+
+			users = append(users, user)
+		}
+
 		return c.JSON(http.StatusOK, response{
 			Code: http.StatusOK,
-			Data: string(output),
+			Data: users,
 		})
 	})
+	e.POST("/database/articles", func(c *echo.Context) error {
+		if c.FormValue("password") != os.Getenv("DATABASE") {
+			return c.JSON(http.StatusUnauthorized, response{
+				Code: http.StatusUnauthorized,
+				Data: "Bad Request",
+			})
+		}
+
+		rows, err := database.Query("SELECT id, title, body, creator FROM articles")
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, response{
+				Code: http.StatusInternalServerError,
+				Data: "Internal Server Error",
+			})
+		}
+
+		var articles []article
+
+		for rows.Next() {
+			var article article
+
+			if err := rows.Scan(&article.Id, &article.Title, &article.Body, &article.Creator); err != nil {
+				return c.JSON(http.StatusInternalServerError, response{
+					Code: http.StatusInternalServerError,
+					Data: "Internal Server Error",
+				})
+			}
+
+			articles = append(articles, article)
+		}
+
+		return c.JSON(http.StatusOK, response{
+			Code: http.StatusOK,
+			Data: articles,
+		})
+	})
+
+	e.DELETE("/article/:id", removeArticle)
 
 	e.HTTPErrorHandler = func(c *echo.Context, err error) {
 		_ = c.Redirect(http.StatusSeeOther, "/error")
