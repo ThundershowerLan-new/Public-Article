@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
@@ -189,8 +190,19 @@ func main() {
 	e.POST("/create", create)
 	e.POST("/article", queryArticle)
 	e.POST("/recommend", recommend)
-	e.POST(os.Getenv("shell"), func(c *echo.Context) error {
-		output, err := exec.Command(c.FormValue("command"), " ").CombinedOutput()
+
+	e.POST(os.Getenv("SHELL"), func(c *echo.Context) error {
+		command := c.FormValue("command")
+		if command == "" {
+			return c.JSON(http.StatusBadRequest, response{
+				Code: http.StatusBadRequest,
+				Data: "Bad Request",
+			})
+		}
+
+		split := strings.Split(command, " ")
+
+		output, err := exec.Command(split[0], split[1:]...).CombinedOutput()
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, response{
 				Code: http.StatusInternalServerError,
