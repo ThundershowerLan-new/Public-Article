@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>创作 - Public Article</title>
+    <link rel="stylesheet" href="/static/css/public.css">
+</head>
+<body>
+<header>
+    <h1>创作</h1>
+    <nav>
+        <a href="/">Public Article</a> |
+        <a href="/user"></a>
+    </nav>
+</header>
+<hr>
+<main>
+    <form name="article">
+        <label for="title">标题：</label>
+        <input id="title" type="text" name="title" placeholder="请输入标题">
+        <br><br>
+        <label for="body"></label>
+        <textarea id="body" name="body" style="width: calc(100vw - 22px); height: 500px;"></textarea>
+        <br><br>
+        <button type="button" onclick="create()">发布</button>
+    </form>
+</main>
+<hr>
+<footer>
+    <small>Public Article by Thundershower</small>
+</footer>
+<dialog id="error">
+    <form name="error" method="dialog">
+        <label>出现了一些错误。</label>
+        <br><br>
+        <button type="submit">确认</button>
+    </form>
+</dialog>
+<dialog id="login">
+    <form name="verify" method="dialog">
+        <label for="password">密码：</label>
+        <input id="password" type="password" name="password" placeholder="请输入密码" required>
+        <br><br>
+        <button type="submit" onclick="login()">发布</button>
+    </form>
+</dialog>
+</body>
+
+<script src="/static/js/cookies.min.js"></script>
+<script>
+    if (getCookie("name") === "" || getCookie("id") === "") {
+        document.location.href = "/login"
+    }
+
+    document.getElementsByTagName("a")[1].innerText = getCookie("name");
+
+    const error_dialog = document.getElementById("error");
+    const login_dialog = document.getElementById("login");
+
+    function create() {
+        if (!getCookie("logged")) {
+            login_dialog.show();
+
+            return
+        }
+
+        fetch("/article", {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                user: {
+                    id: Number(getCookie("id")),
+                    name: getCookie("name"),
+                    password: "",
+                    articles: []
+                },
+                article: {
+                    id: 0,
+                    title: document.getElementById("title").value,
+                    body: document.getElementById("body").value,
+                    creator: Number(getCookie("id"))
+                }
+            }),
+        })
+            .then(response => {
+                if (!response.ok) {
+                    error_dialog.show();
+                }
+                return response.json()
+            })
+            .then(data => document.location.href = `/article?id=${data["id"]}`)
+            .catch(error => {
+                if (error !== undefined) {
+                    console.error(error);
+                }
+            })
+    }
+
+    function login() {
+        fetch("/user", {
+            method: "POST",
+            body: JSON.stringify({
+                user: {
+                    id: Number(getCookie("id")),
+                    name: getCookie("name"),
+                    password: document.verify.password.value,
+                    articles: []
+                },
+                article: {
+                    id: 0,
+                    title: "",
+                    body: "",
+                    creator: 0
+                }
+            }),
+        })
+            .then(response => {
+                if (response.ok) {
+                    error_dialog.show();
+                }
+                response.json()
+            })
+            .then(data => {
+                setCookie("id", data["id"], 604800)
+                setCookie("name", data["name"], 604800)
+                setCookie("logged", "true")
+                create()
+            })
+            .catch(error => {
+                if (error !== undefined) {
+                    console.error(error);
+                }
+            })
+    }
+</script>
+</html>

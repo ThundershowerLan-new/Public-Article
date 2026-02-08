@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Public Article</title>
+    <link rel="stylesheet" href="/static/css/public.css">
+</head>
+<body>
+<header>
+    <h1>Public Article</h1>
+    <nav>
+        <a href="/login">登录</a> |
+        <a href="/article?id=0">关于</a>
+    </nav>
+</header>
+<hr>
+<main>
+</main>
+<hr>
+<footer>
+    <small>Public Article by Thundershower</small>
+</footer>
+<dialog id="error">
+    <form name="information" method="dialog">
+        <label>出现了一些错误。</label>
+        <br><br>
+        <button type="submit">确认</button>
+    </form>
+</dialog>
+<dialog id="login">
+    <form name="information" method="dialog">
+        <label for="password">密码：</label>
+        <input id="password" type="password" name="password" placeholder="请输入密码" required>
+        <br><br>
+        <button type="submit" onclick="login()">发布</button>
+    </form>
+</dialog>
+</body>
+
+<script src="/static/js/cookies.min.js"></script>
+<script>
+    const home = document.getElementsByTagName("a")[0];
+    const error_dialog = document.getElementById("error");
+
+    const name = getCookie("name");
+
+    if (name !== "") {
+        home.innerText = name;
+        home.href = "/user";
+    }
+
+    fetch("/", {
+        method: "POST",
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+        .then(response => {
+            if (!response.ok) {
+                error_dialog.show();
+            }
+            return response.json();
+        })
+        .then(data => {
+            const main = document.getElementsByTagName("main")[0];
+            for (let index in data) {
+                main.innerHTML += `<a href="/article?id=${data[index]["id"]}">${data[index]["title"]}</a><br><br>`
+            }
+        })
+        .catch(error => {
+            if (error !== undefined) {
+                console.error(error);
+            }
+        })
+</script>
+</html>

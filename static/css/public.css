@@ -1,0 +1,45 @@
+@font-face {
+    font-family: "Sarasa";
+    src: url("/static/fonts/SarasaMonoSlabSC-BoldItalic.woff2") format("woff2"),
+         url("/static/fonts/SarasaMonoSlabSC-BoldItalic.ttf") format("truetype");
+    font-weight: bold;
+    font-style: italic;
+    font-display: swap;
+}
+
+* {
+    font-family: "Sarasa", monospace;
+    font-weight: bold;
+    font-style: italic;
+}
+
+hr {
+    border: black solid 1px;
+}
+
+button {
+    outline: none;
+    border: 2px solid black;
+    background-color: white;
+}
+
+input {
+    outline: none;
+    border: none;
+    border-bottom: 2px solid black;
+}
+
+textarea {
+    outline: none;
+    border: 2px solid black;
+    resize: none;
+}
+
+dialog {
+    position: absolute;
+    margin: auto;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}

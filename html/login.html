@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - Public Article</title>
+    <link rel="stylesheet" href="/static/css/public.css">
+</head>
+<body>
+<header>
+    <h1>登录</h1>
+    <nav>
+        <a href="/">Public Article</a> |
+        <a href="/article/0">关于</a>
+    </nav>
+</header>
+<hr>
+<main>
+    <form name="information">
+        <label for="name">名字：</label>
+        <input id="name" type="text" name="name" placeholder="请输入名字" required>
+        <br><br>
+        <label for="password">密码：</label>
+        <input id="password" type="password" name="password" placeholder="请输入密码" required>
+        <br><br>
+        <button type="button" onclick="login()">登录/注册</button>
+    </form>
+</main>
+<hr>
+<footer>
+    <small>Public Article by Thundershower</small>
+</footer>
+<dialog id="error">
+    <form name="information" method="dialog">
+        <label>出现了一些错误。</label>
+        <br><br>
+        <button type="submit">确认</button>
+    </form>
+</dialog>
+</body>
+
+<script src="/static/js/cookies.min.js"></script>
+<script>
+    function login() {
+        fetch("/user", {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                user: {
+                    id: 0,
+                    name: document.getElementById("name").value,
+                    password: document.getElementById("password").value,
+                    articles: []
+                },
+                article: {
+                    id: 0,
+                    title: "",
+                    body: "",
+                    creator: 0
+                }
+            }),
+        })
+            .then(response => {
+                if(!response.ok) {
+                    document.getElementById("error").show();
+                }
+                return response.json();
+            })
+            .then(data => {
+                setCookie("id", data["id"], 604800);
+                setCookie("name", data["name"], 604800);
+                setCookie("logged", "true");
+                document.location.href = "/";
+            })
+            .catch(error => {
+                if (error !== undefined) {
+                    console.error(error);
+                }
+            })
+    }
+</script>
+</html>

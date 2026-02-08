@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title></title>
+    <link rel="stylesheet" href="/static/css/public.css">
+</head>
+<body>
+<header>
+    <h1></h1>
+    <nav>
+        <a href="/">Public Article</a>
+    </nav>
+</header>
+<hr>
+<main>
+</main>
+<hr>
+<footer>
+    <small>Public Article by Thundershower</small>
+</footer>
+<dialog id="article">
+    <form name="article" method="dialog">
+        <label for="title">标题：</label>
+        <input id="title" type="text" name="title" placeholder="请输入标题">
+        <br><br>
+        <label for="body"></label>
+        <textarea id="body" name="body" style="width: 60vw; height: 60vh;"></textarea>
+        <br><br>
+        <button type="button" name="update">修改</button>
+    </form>
+</dialog>
+<dialog id="information">
+    <form name="information" method="dialog">
+        <label for="new_name">名字：</label>
+        <input id="new_name" type="text" name="new_name" placeholder="请输入新名字">
+        <br><br>
+        <label for="new_password">密码：</label>
+        <input id="new_password" type="password" name="new_password" placeholder="请输入新密码">
+        <br><br>
+        <button type="submit" onclick="delete_user()" style="color: red">删除</button>
+        <button type="submit" onclick="put_user()">更改</button>
+    </form>
+</dialog>
+<dialog id="login">
+    <form name="verify" method="dialog">
+        <label for="password">密码：</label>
+        <input id="password" type="password" name="password" placeholder="请输入密码" required>
+        <br><br>
+        <button type="submit" onclick="login()">登录</button>
+    </form>
+</dialog>
+<dialog id="error">
+    <form name="error" method="dialog">
+        <label>出现了一些错误。</label>
+        <br><br>
+        <button type="submit">确认</button>
+    </form>
+</dialog>
+</body>
+
+<script src="/static/js/cookies.min.js"></script>
+<script>
+    const error_dialog = document.getElementById("error");
+    const login_dialog = document.getElementById("login");
+    const information_dialog = document.getElementById("information");
+    const article_dialog = document.getElementById("article");
+
+    const id = new URLSearchParams(document.location.search).get("id") || getCookie("id");
+    if (id === "") {
+        document.location.href = "/login";
+    }
+
+    const own = getCookie("id") === id;
+
+    document.getElementsByTagName("nav")[0].innerHTML += own ? ` |\n<a href="/create">创作</a> |\n<a onclick="information_dialog.show()">修改</a>` : ` |\n<a href="/user/${getCookie("id")}">${getCookie("name")}</a>`;
+
+    fetch(`/user/${id}`, {
+        method: "GET",
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+        .then(response => {
+            if(!response.ok) {
+                error_dialog.show();
+            }
+            return response.json();
+        })
+        .then(data => {
+            const main = document.getElementsByTagName("main")[0];
+
+            document.getElementsByTagName("h1")[0].innerText = data["name"];
+            for (const index in data["articles"]) {
+                main.innerHTML += `<a href="/article?id=${data["articles"][index]["id"]}">${data["articles"][index]["title"]}</a>${own ? ` <a onclick="delete_article(${data["articles"][index]["id"]})" style="color: red">删除</a> <a onclick="update_article(${data["articles"][index]["id"]})">更改</a>` : ""}<br><br>`
+            }
+        })
+        .catch(error => {
+            if (error !== undefined) {
+                console.error(error);
+            }
+        })
+
+    function delete_user() {
+        if (!getCookie("logged")) {
+            login_dialog.show();
+
+            return
+        }
+
+        fetch(`/user/${id}`, {
+            method: "DELETE",
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+            .then(response => {
+                if (!response.ok) {
+                    error_dialog.show();
+                }
+
+                return response.json();
+            })
+            .then(_ => {
+                deleteCookie("id");
+                deleteCookie("name");
+                deleteCookie("logged");
+
+                document.location.href = "/";
+            })
+            .catch(error => {
+                if (error !== undefined) {
+                    console.error(error);
+                }
+            })
+    }
+
+    function put_user() {
+        if (!getCookie("logged")) {
+            login_dialog.show();
+
+            return
+        }
+
+        fetch(`/user/${id}`, {
+            method: "PUT",
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                user: {
+                    id: 0,
+                    name: document.information.new_name.value,
+                    password: document.information.new_password.value,
+                    articles: []
+                },
+                article: {
+                    id: 0,
+                    title: "",
+                    body: "",
+                    creator: 0
+                }
+            })
+        })
+            .then(response => {
+                if (!response.ok) {
+                    error_dialog.show();
+                }
+
+                return response.json();
+            })
+            .then(data => {
+                setCookie("name", data["name"], 604800);
+
+                document.location.reload();
+            })
+            .catch(error => {
+                if (error !== undefined) {
+                    console.error(error);
+                }
+            })
+    }
+
+    function delete_article(article) {
+        if (!getCookie("logged")) {
+            login_dialog.show();
+
+            return
+        }
+
+        fetch(`/article/${article}`, {
+            method: "DELETE",
+            headers: {
+                "Content-Type": "application/json",
+            }
+        })
+            .then(response => {
+                if (!response.ok) {
+                    error_dialog.show();
+                }
+                return response.json();
+            })
+            .then(_ => document.location.reload())
+            .catch(error => {
+                if (error !== undefined) {
+                    console.error(error);
+                }
+            })
+    }
+
+    function update_article(article) {
+        fetch(`/article/${article}`, {
+            method: "GET",
+        })
+            .then(response => {
+                if (!response.ok) {
+                    error_dialog.show();
+                }
+                return response.json();
+            })
+            .then(data => {
+                document.article.title.value = data["title"];
+                document.article.body.value = data["body"];
+                document.article.update.setAttribute("onclick", `put_article(${data["id"]})`);
+
+                article_dialog.show()
+            })
+            .catch(error => {
+                if (error !== undefined) {
+                    console.error(error);
+                }
+            })
+    }
+
+    function put_article(article) {
+        if (!getCookie("logged")) {
+            login_dialog.show();
+
+            return
+        }
+
+        fetch(`/article/${article}`, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                user: {
+                    id: 0,
+                    name: "",
+                    password: "",
+                    articles: []
+                },
+                article: {
+                    id: 0,
+                    title: document.article.title.value,
+                    body: document.article.body.value,
+                    creator: 0
+                }
+            })
+        })
+            .then(response => {
+                if (!response.ok) {
+                    error_dialog.show();
+                }
+
+                return response.json();
+            })
+            .then(_ => {
+                document.location.reload();
+            })
+            .catch(error => {
+                if (error !== undefined) {
+                    console.error(error);
+                }
+            })
+    }
+</script>
+</html>
