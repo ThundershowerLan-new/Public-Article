@@ -38,7 +38,7 @@ async fn main() -> std::io::Result<()> {
                 .service(delete::articles)
                 .service(put::articles))
     })
-        .bind(("0.0.0.0", 8088))?
+        .bind(("0.0.0.0", 80))?
         .run()
         .await
 }
