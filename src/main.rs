@@ -19,7 +19,6 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::default())
             .service(get::favicon)
             .service(Files::new("/static", "./static"))
-            .service(post::shell)
             .service(get::error)
             .service(post::error)
             .service(get::index)
