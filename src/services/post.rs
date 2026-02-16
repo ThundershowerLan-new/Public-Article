@@ -53,6 +53,7 @@ pub(crate) async fn index(
     ).await {
         let mut articles = Vec::<ShowableArticle>::new();
 
+        let _ = rows.next().await;
         while let Ok(option) = rows.next().await {
             match option {
                 Some(row) => {
