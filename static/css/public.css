@@ -25,6 +25,7 @@ button {
 
 input {
     outline: none;
+    width: 250px;
     border: none;
     border-bottom: 2px solid black;
 }

@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 actix-files = "0.6.9"
 actix-web = "4.12.1"
-sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite"] }
 serde = { version = "1.0.228", features = ["derive"] }
 env_logger = "0.11.8"
+dotenvy = "0.15.7"
+libsql = "0.9.29"

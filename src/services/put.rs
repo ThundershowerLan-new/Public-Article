@@ -1,71 +1,67 @@
 use actix_web::{put, web, HttpRequest, HttpResponse};
 use actix_web::cookie::Cookie;
-use sqlx::{Error, SqlitePool};
+use libsql::Connection;
+use serde::Deserialize;
 use crate::database;
-use crate::database::User;
-use crate::services::Request;
+
+#[derive(Deserialize)]
+struct User {
+    name: String,
+    password: String
+}
+
+#[derive(Deserialize)]
+struct Article {
+    title: String,
+    body: String,
+    creator: u32
+}
 
 #[put("/{id}")]
 pub(crate) async fn users(
-    pool: web::Data<SqlitePool>,
-    data: web::Json<Request>,
+    connection: web::Data<Connection>,
+    data: web::Json<User>,
     request: HttpRequest,
     path: web::Path<u32>
 ) -> HttpResponse {
     let id = path.into_inner();
+    let password = request
+        .cookie("password")
+        .map_or("".to_string(), |cookie| cookie.value().to_string());
 
-    match database::user::getter(pool.get_ref(), id).await {
-        Ok(current_user) => {
-            if current_user.password != request.cookie("password")
-                .map(|password| password.value().to_string())
-                .unwrap_or_else(|| "".to_string()) {
-                return HttpResponse::Unauthorized().finish();
-            }
-
-            database::user::updater(pool.get_ref(), id, &data.user.name, &data.user.password)
+    match database::user::verifier_by_id(&connection, id, password).await {
+        Ok(_) => database::user::updater(&connection, id, data.name.clone(), data.password.clone())
                 .await
-                .map(|updated_user| {
-                    HttpResponse::Ok()
-                        .cookie(Cookie::build("password", &updated_user.password)
-                            .path("/")
-                            .http_only(true)
-                            .finish())
-                        .json(updated_user)
-                })
-                .unwrap_or_else(|_| HttpResponse::InternalServerError().finish())
-        },
-        Err(Error::RowNotFound) => HttpResponse::NotFound().finish(),
-        Err(_) => HttpResponse::InternalServerError().finish()
+                .map_or(HttpResponse::InternalServerError().finish(),
+                        |_| {
+                            HttpResponse::Ok()
+                                .cookie(Cookie::build("password", data.password.clone())
+                                    .path("/")
+                                    .http_only(true)
+                                    .finish())
+                                .finish()
+                        }),
+        Err(_) => HttpResponse::Unauthorized().finish()
     }
 }
 
 #[put("/{id}")]
 pub(crate) async fn articles(
-    pool: web::Data<SqlitePool>,
-    data: web::Json<Request>,
+    connection: web::Data<Connection>,
+    data: web::Json<Article>,
     request: HttpRequest,
     path: web::Path<u32>
 ) -> HttpResponse {
     let id = path.into_inner();
+    let password = request
+        .cookie("password")
+        .map_or("".to_string(), |cookie| cookie.value().to_string());
 
-    match database::article::getter(pool.get_ref(), id).await {
-        Ok(current_article) => {
-            if database::user::getter(pool.get_ref(), current_article.creator)
-                .await
-                .unwrap_or_else(|_| User::new(0, &"".to_string(), &"".to_string()))
-                .password !=
-                request.cookie("password")
-                    .map(|password| password.value().to_string())
-                    .unwrap_or_else(|| "".to_string()) {
-                return HttpResponse::Unauthorized().finish();
-            }
-
-            database::article::updater(pool.get_ref(), id, &data.article.title, &data.article.body)
-                .await
-                .map(|updated_article| HttpResponse::Ok().json(updated_article))
-                .unwrap_or_else(|_| HttpResponse::InternalServerError().finish())
-        },
-        Err(Error::RowNotFound) => HttpResponse::NotFound().finish(),
-        Err(_) => HttpResponse::InternalServerError().finish()
+    match database::user::verifier_by_id(&connection, data.creator.clone(), password).await {
+        Ok(_) => database::article::updater(&connection, id, data.title.clone(), data.body.clone())
+            .await
+            .map_or(HttpResponse::InternalServerError().finish(),
+                    |_| HttpResponse::Ok().finish()),
+        Err(_) => HttpResponse::Unauthorized().finish()
     }
 }

@@ -42,12 +42,13 @@
         <label for="password">密码：</label>
         <input id="password" type="password" name="password" placeholder="请输入密码" required>
         <br><br>
-        <button type="submit" onclick="login()">发布</button>
+        <button type="submit" onclick="login()">登录</button>
     </form>
 </dialog>
 </body>
 
 <script src="/static/js/cookies.min.js"></script>
+<script src="/static/js/general_fetch.min.js"></script>
 <script>
     if (getCookie("name") === "" || getCookie("id") === "") {
         document.location.href = "/login"
@@ -65,75 +66,26 @@
             return
         }
 
-        fetch("/article", {
-            method: "POST",
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                user: {
-                    id: Number(getCookie("id")),
-                    name: getCookie("name"),
-                    password: "",
-                    articles: []
-                },
-                article: {
-                    id: 0,
-                    title: document.getElementById("title").value,
-                    body: document.getElementById("body").value,
-                    creator: Number(getCookie("id"))
-                }
-            }),
-        })
-            .then(response => {
-                if (!response.ok) {
-                    error_dialog.show();
-                }
-                return response.json()
+        general_fetch(
+            "/article",
+            _ => document.location.href = "/user",
+            "POST",
+            JSON.stringify({
+                title: document.article.title.value,
+                body: document.article.body.value
             })
-            .then(data => document.location.href = `/article?id=${data["id"]}`)
-            .catch(error => {
-                if (error !== undefined) {
-                    console.error(error);
-                }
-            })
+        )
     }
 
     function login() {
-        fetch("/user", {
-            method: "POST",
-            body: JSON.stringify({
-                user: {
-                    id: Number(getCookie("id")),
-                    name: getCookie("name"),
-                    password: document.verify.password.value,
-                    articles: []
-                },
-                article: {
-                    id: 0,
-                    title: "",
-                    body: "",
-                    creator: 0
-                }
-            }),
-        })
-            .then(response => {
-                if (response.ok) {
-                    error_dialog.show();
-                }
-                response.json()
-            })
-            .then(data => {
-                setCookie("id", data["id"], 604800)
-                setCookie("name", data["name"], 604800)
-                setCookie("logged", "true")
-                create()
-            })
-            .catch(error => {
-                if (error !== undefined) {
-                    console.error(error);
-                }
-            })
+        general_fetch("/user", _ => {
+            setCookie("id", getCookie("id"), 604800);
+            setCookie("name", getCookie("name"), 604800);
+            setCookie("logged", "true");
+        }, "POST", JSON.stringify({
+            name: getCookie("name"),
+            password: document.verify.password.value
+        }));
     }
 </script>
 </html>

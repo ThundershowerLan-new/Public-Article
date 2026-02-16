@@ -1,12 +1,76 @@
 use actix_files::NamedFile;
 use actix_web::{get, web, HttpResponse};
-use sqlx::{Error, SqlitePool};
+use libsql::{Connection, Error, Row};
+use serde::Serialize;
 use crate::database;
-use crate::database::User;
+use crate::database::FromRow;
 
-#[get("/coffee")]
-pub(crate) async fn error() -> HttpResponse {
-    HttpResponse::ImATeapot().body("Sorry, I'm a teapot!\n")
+#[derive(Serialize)]
+struct User {
+    name: String,
+    articles: Vec<AttachedArticle>
+}
+
+#[derive(Serialize)]
+struct Article {
+    title: String,
+    body: String,
+    creator: u32
+}
+
+#[derive(Serialize)]
+struct AttachedArticle {
+    id: u32,
+    title: String
+}
+
+impl FromRow for User {
+    fn from_row(row: Row) -> Result<Self, Error> {
+        Ok(Self {
+            name: row.get(0)?,
+            articles: Vec::new()
+        })
+    }
+
+    fn from_option_row(option: Option<Row>) -> Result<Self, Error> {
+        match option {
+            Some(row) => Self::from_row(row),
+            None => Err(Error::QueryReturnedNoRows)
+        }
+    }
+}
+
+impl FromRow for Article {
+    fn from_row(row: Row) -> Result<Self, Error> {
+        Ok(Self {
+            title: row.get(0)?,
+            body: row.get(1)?,
+            creator: row.get(2)?
+        })
+    }
+
+    fn from_option_row(option: Option<Row>) -> Result<Self, Error> {
+        match option {
+            Some(row) => Self::from_row(row),
+            None => Err(Error::QueryReturnedNoRows)
+        }
+    }
+}
+
+impl FromRow for AttachedArticle {
+    fn from_row(row: Row) -> Result<Self, Error> {
+        Ok(AttachedArticle {
+            id: row.get(0)?,
+            title: row.get(1)?,
+        })
+    }
+
+    fn from_option_row(option: Option<Row>) -> Result<Self, Error> {
+        match option {
+            Some(row) => Self::from_row(row),
+            None => Err(Error::QueryReturnedNoRows)
+        }
+    }
 }
 
 #[get("/favicon.ico")]
@@ -41,31 +105,29 @@ pub(crate) async fn article() -> actix_web::Result<NamedFile> {
 
 #[get("/{id}")]
 pub(crate) async fn users(
-    pool: web::Data<SqlitePool>,
+    connection: web::Data<Connection>,
     path: web::Path<u32>
 ) -> HttpResponse {
-    match database::user::getter(pool.get_ref(), path.into_inner()).await {
-        Ok(current_user) => HttpResponse::Ok().json(User{
-            password: "".to_string(),
-            articles: match database::article::finder(pool.get_ref(), current_user.id).await {
-                Ok(current_articles) => current_articles,
-                Err(_) => return HttpResponse::InternalServerError().finish(),
-            },
-            ..current_user
-        }),
-        Err(Error::RowNotFound) => HttpResponse::NotFound().finish(),
-        Err(_) => HttpResponse::InternalServerError().finish()
+    let id = path.into_inner();
+
+    match database::user::getter::<User>(&connection, id).await {
+        Ok(mut current_user) => {
+            current_user.articles = database::article::finder::<AttachedArticle>(&connection, id)
+                .await
+                .unwrap_or_default();
+            HttpResponse::Ok().json(current_user)
+        },
+        Err(_) => HttpResponse::NotFound().finish()
     }
 }
 
 #[get("/{id}")]
 pub(crate) async fn articles(
-    pool: web::Data<SqlitePool>,
+    connection: web::Data<Connection>,
     path: web::Path<u32>
 ) -> HttpResponse {
-    match database::article::getter(pool.get_ref(), path.into_inner()).await {
+    match database::article::getter::<Article>(&connection, path.into_inner()).await {
         Ok(current_article) => HttpResponse::Ok().json(current_article),
-        Err(Error::RowNotFound) => HttpResponse::NotFound().finish(),
-        Err(_) => HttpResponse::InternalServerError().finish()
+        Err(_) => HttpResponse::NotFound().finish()
     }
 }

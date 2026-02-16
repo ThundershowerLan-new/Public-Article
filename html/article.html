@@ -16,32 +16,16 @@
 </dialog>
 </body>
 
+<script src="/static/js/general_fetch.min.js"></script>
 <script>
-    const error_dialog = document.getElementById("error");
-
     const id = new URLSearchParams(document.location.search).get("id");
     if (id === null) {
         error_dialog.show();
     }
 
-    fetch(`/article/${id}`, {
-        method: "GET",
+    general_fetch(`/article/${id}`, data => {
+        document.title = data["title"];
+        document.body.innerHTML = data["body"];
     })
-        .then(response => {
-            if (!response.ok) {
-                error_dialog.show();
-            }
-
-            return response.json();
-        })
-        .then(data => {
-            document.title = data["title"];
-            document.body.innerHTML = data["body"];
-        })
-        .catch(error => {
-            if (error !== undefined) {
-                console.error(error);
-            }
-        })
 </script>
 </html>

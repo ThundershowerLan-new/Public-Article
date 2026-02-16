@@ -1,83 +1,123 @@
 use crate::database;
-use crate::database::{Article, User};
-use crate::services::Request;
 use actix_web::{post, web, HttpRequest, HttpResponse};
 use actix_web::cookie::Cookie;
-use sqlx::{Error, SqlitePool};
+use libsql::{params, Connection, Error, Row};
+use serde::{Deserialize, Serialize};
+use crate::database::FromRow;
 
-#[post("/coffee")]
-pub(crate) async fn error() -> HttpResponse {
-    HttpResponse::ImATeapot().body("Sorry, I'm a teapot!\n")
+#[derive(Deserialize)]
+struct User {
+    name: String,
+    password: String
+}
+
+#[derive(Deserialize)]
+struct Article {
+    title: String,
+    body: String,
+}
+
+#[derive(Serialize)]
+struct Return {
+    id: u32
+}
+
+#[derive(Serialize)]
+struct ShowableArticle {
+    id: u32,
+    title: String
+}
+
+impl FromRow for Return {
+    fn from_row(row: Row) -> Result<Self, Error> {
+        Ok(Self {
+            id: row.get(0)?
+        })
+    }
+
+    fn from_option_row(option: Option<Row>) -> Result<Self, Error> {
+        match option {
+            Some(row) => Self::from_row(row),
+            None => Err(Error::QueryReturnedNoRows)
+        }
+    }
 }
 
 #[post("/")]
 pub(crate) async fn index(
-    pool: web::Data<SqlitePool>
+    connection: web::Data<Connection>
 ) -> HttpResponse {
-    let result =
-        sqlx::query_as::<_, Article>("SELECT * FROM articles WHERE id > 0")
-        .fetch_all(pool.get_ref())
-        .await;
+    if let Ok(mut rows) = connection.query(
+        "SELECT id, title FROM articles",
+        params!()
+    ).await {
+        let mut articles = Vec::<ShowableArticle>::new();
 
-    match result {
-        Ok(articles) => HttpResponse::Ok().json(articles),
-        Err(_) => HttpResponse::InternalServerError().json({})
+        while let Ok(option) = rows.next().await {
+            match option {
+                Some(row) => {
+                    articles.push(ShowableArticle {
+                        id: row.get(0).unwrap_or_default(),
+                        title: row.get(1).unwrap_or_default()
+                    })
+                },
+                None => break
+            }
+        }
+
+        HttpResponse::Ok().json(articles)
+    } else {
+        HttpResponse::InternalServerError().finish()
     }
 }
 
 #[post("")]
 pub(crate) async fn user(
-    pool: web::Data<SqlitePool>,
-    data: web::Json<Request>
+    connection: web::Data<Connection>,
+    data: web::Json<User>
 ) -> HttpResponse {
-    match database::user::finder(pool.get_ref(), &data.user.name).await {
-        Ok(current_user) => {
-            if current_user.password != data.user.password {
-                return HttpResponse::Unauthorized().finish();
-            }
-
+    match database::user::verifier_by_name::<Return>(&connection, data.name.clone(), data.password.clone()).await {
+        Ok(id) => {
             HttpResponse::Ok()
-                .cookie(Cookie::build("password", &current_user.password)
+                .cookie(Cookie::build("password", &data.password)
                     .path("/")
                     .http_only(true)
                     .finish())
-                .json(current_user)
+                .json(id)
         },
-        Err(Error::RowNotFound) => {
-            database::user::creator(pool.get_ref(), &data.user.name, &data.user.password)
+        Err(_) => {
+            database::user::creator::<Return>(&connection, data.name.clone(), data.password.clone())
                 .await
-                .map(|new_user| HttpResponse::Created()
-                    .cookie(Cookie::build("password", &new_user.password)
+                .map_or(HttpResponse::InternalServerError().finish(),
+                        |id| HttpResponse::Created()
+                    .cookie(Cookie::build("password", &data.password)
                         .http_only(true)
                         .finish())
-                    .json(new_user))
-                .unwrap_or_else(|_| HttpResponse::InternalServerError().finish())
+                    .json(id))
         }
-        Err(_) => HttpResponse::InternalServerError().finish()
     }
 }
 
 #[post("")]
 pub(crate) async fn article(
-    pool: web::Data<SqlitePool>,
-    data: web::Json<Request>,
+    connection: web::Data<Connection>,
+    data: web::Json<Article>,
     request: HttpRequest
 ) -> HttpResponse {
-    match database::user::getter(pool.get_ref(), data.user.id).await {
-        Ok(current_user) => {
-            if current_user != (User{
-                password: if let Some(password) = request.cookie("password") { password.value().to_string() } else { "".to_string() },
-                ..data.user.clone()
-            }) {
-                return HttpResponse::Unauthorized().finish();
-            }
+    let creator = request
+        .cookie("id")
+        .map_or(0, |cookie| cookie.value().parse().unwrap_or_default());
+    let password = request
+        .cookie("password")
+        .map_or("".to_string(), |cookie| cookie.value().to_string());
 
-            database::article::creator(pool.get_ref(), &data.article.title, &data.article.body, current_user.id)
+    match database::user::verifier_by_id(&connection, creator, password).await {
+        Ok(_) => {
+            database::article::creator::<Return>(&connection, data.title.clone(), data.body.clone(), creator)
                 .await
-                .map(|result| HttpResponse::Created().json(result))
-                .unwrap_or_else(|_| HttpResponse::InternalServerError().finish())
+                .map_or(HttpResponse::InternalServerError().finish(),
+                        |id| HttpResponse::Created().json(id))
         },
-        Err(Error::RowNotFound) => HttpResponse::NotFound().finish(),
-        Err(_) => HttpResponse::InternalServerError().finish(),
+        Err(_) => HttpResponse::Unauthorized().finish()
     }
 }

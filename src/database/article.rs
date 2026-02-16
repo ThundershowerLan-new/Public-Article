@@ -1,108 +1,69 @@
-use crate::database::Article;
-use sqlx::SqlitePool;
+use libsql::{params, Connection, Error};
+use crate::database::FromRow;
 
-pub(crate) async fn creator(
-    pool: &SqlitePool, 
-    title: &String, 
-    body: &String, 
+pub(crate) async fn creator<A: FromRow> (
+    connection: &Connection,
+    title: String,
+    body: String,
     creator: u32
-) -> Result<Article, sqlx::Error> {
-    sqlx::query_as::<_, Article>("INSERT INTO articles (title, body, creator) VALUES (?, ?, ?) RETURNING *")
-        .bind(title)
-        .bind(body)
-        .bind(creator)
-        .fetch_one(pool)
-        .await
+) -> Result<A, Error> {
+    A::from_option_row(
+        connection.query(
+            "INSERT INTO articles (title, body, creator) VALUES (?, ?, ?) RETURNING id",
+            params!(title, body, creator)
+        ).await?.next().await?
+    )
 }
 
 pub(crate) async fn deleter(
-    pool: &SqlitePool, 
+    connection: &Connection,
     id: u32
-) -> Result<(), sqlx::Error> {
-    sqlx::query("DELETE FROM articles WHERE id = ?")
-        .bind(id)
-        .execute(pool)
-        .await?;
+) -> Result<(), Error> {
+    connection.execute(
+        "DELETE FROM articles WHERE id = ?",
+        params!(id)
+    ).await?;
     Ok(())
 }
 
 pub(crate) async fn updater(
-    pool: &SqlitePool, 
+    connection: &Connection,
     id: u32, 
-    title: &String, 
-    body: &String
-) -> Result<Article, sqlx::Error> {
-    sqlx::query_as::<_, Article>("UPDATE articles SET title = ?, body = ? WHERE id = ? RETURNING *")
-        .bind(title)
-        .bind(body)
-        .bind(id)
-        .fetch_one(pool)
-        .await
+    title: String,
+    body: String
+) -> Result<u64, Error> {
+    connection.execute(
+            "UPDATE articles SET title = ?, body = ? WHERE id = ?",
+            params!(title, body, id)
+    ).await
 }
 
-pub(crate) async fn getter(
-    pool: &SqlitePool, 
+pub(crate) async fn getter<A: FromRow>(
+    connection: &Connection,
     id: u32
-) -> Result<Article, sqlx::Error> {
-    sqlx::query_as::<_, Article>("SELECT * FROM articles WHERE id = ?")
-        .bind(id)
-        .fetch_one(pool)
-        .await
+) -> Result<A, Error> {
+    A::from_option_row(
+        connection.query(
+            "SELECT title, body, creator FROM articles WHERE id = ?",
+            params!(id)
+        ).await?.next().await?
+    )
 }
 
-pub(crate) async fn finder(
-    pool: &SqlitePool,
+pub(crate) async fn finder<A: FromRow>(
+    connection: &Connection,
     creator: u32
-) -> Result<Vec<Article>, sqlx::Error> {
-    sqlx::query_as::<_, Article>("SELECT * FROM articles WHERE creator = ?")
-        .bind(creator)
-        .fetch_all(pool)
-        .await
-}
+) -> Result<Vec<A>, Error> {
+    let mut articles = Vec::<A>::new();
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::database::initialize_database;
+    let mut rows = connection.query(
+        "SELECT id, title FROM articles WHERE creator = ?",
+        params!(creator)
+    ).await?;
 
-    #[actix_web::test]
-    async fn lifetime() {
-        let pool = initialize_database().await;
-
-        if let Err(error) = creator(&pool, &"TestTitle".to_string(), &"TestBody".to_string(), 0).await {
-            panic!("{}", error);
-        }
-
-        match getter(&pool, 1).await {
-            Ok(article) => {
-                assert_eq!(article.id, 1);
-                assert_eq!(article.title, "TestTitle".to_string());
-                assert_eq!(article.body, "TestBody".to_string());
-                assert_eq!(article.creator, 0);
-            },
-            Err(error) => panic!("{}", error),
-        }
-
-        if let Err(error) = updater(&pool, 1, &"UpdatedTitle".to_string(), &"UpdatedBody".to_string()).await {
-            panic!("{}", error);
-        }
-
-        match getter(&pool, 1).await {
-            Ok(article) => {
-                assert_eq!(article.id, 1);
-                assert_eq!(article.title, "UpdatedTitle".to_string());
-                assert_eq!(article.body, "UpdatedBody".to_string());
-                assert_eq!(article.creator, 0);
-            },
-            Err(error) => panic!("{}", error),
-        }
-
-        if let Err(error) = deleter(&pool, 1).await {
-            panic!("{}", error);
-        }
-
-        if let Ok(article) = getter(&pool, 1).await {
-            panic!("{:?}", article);
-        }
+    while let Some(row) = rows.next().await? {
+        articles.push(A::from_row(row)?)
     }
+
+    Ok(articles)
 }

@@ -1,114 +1,77 @@
-use crate::database::User;
-use sqlx::SqlitePool;
+use libsql::{params, Connection, Error};
+use crate::database::FromRow;
 
-pub(crate) async fn creator(
-    pool: &SqlitePool, 
-    name: &String, 
-    password: &String
-) -> Result<User, sqlx::Error> {
-    sqlx::query_as::<_, User>("INSERT INTO users (name, password) VALUES (?, ?) RETURNING *")
-        .bind(name)
-        .bind(password)
-        .fetch_one(pool)
-        .await
+pub(crate) async fn creator<U: FromRow> (
+    connection: &Connection,
+    name: String,
+    password: String
+) -> Result<U, Error> {
+    U::from_option_row(
+        connection.query(
+            "INSERT INTO users (name, password) VALUES (?, ?) RETURNING id",
+            params!(name, password),
+        ).await?.next().await?
+    )
 }
 
 pub(crate) async fn deleter(
-    pool: &SqlitePool, 
+    connection: &Connection,
     id: u32
-) -> Result<(), sqlx::Error> {
-    sqlx::query("DELETE FROM users WHERE id = ?")
-        .bind(id)
-        .execute(pool)
-        .await?;
+) -> Result<(), Error> {
+    connection.execute(
+        "DELETE FROM users WHERE id = ?",
+        params!(id)
+    ).await?;
     Ok(())
 }
 
 pub(crate) async fn updater(
-    pool: &SqlitePool,
+    connection: &Connection,
     id: u32, 
-    name: &String, 
-    password: &String
-) -> Result<User, sqlx::Error> {
-    sqlx::query_as::<_, User>("UPDATE users SET name = ?, password = ? WHERE id = ? RETURNING *")
-        .bind(name)
-        .bind(password)
-        .bind(id)
-        .fetch_one(pool)
-        .await
+    name: String,
+    password: String
+) -> Result<(), Error> {
+    match connection.query(
+            "UPDATE users SET name = ?, password = ? WHERE id = ?",
+            params!(name, password, id),
+    ).await?.next().await? {
+        Some(_) => Ok(()),
+        None => Err(Error::QueryReturnedNoRows)
+    }
 }
 
-pub(crate) async fn getter(
-    pool: &SqlitePool, 
+pub(crate) async fn getter<U: FromRow>(
+    connection: &Connection,
     id: u32
-) -> Result<User, sqlx::Error> {
-    sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = ?")
-        .bind(id)
-        .fetch_one(pool)
-        .await
+) -> Result<U, Error> {
+    U::from_option_row(
+        connection.query(
+            "SELECT name FROM users WHERE id = ?",
+            params!(id)
+        ).await?.next().await?
+    )
 }
 
-pub(crate) async fn finder(
-    pool: &SqlitePool, 
-    name: &String
-) -> Result<User, sqlx::Error> {
-    sqlx::query_as::<_, User>("SELECT * FROM users WHERE name = ?")
-        .bind(name)
-        .fetch_one(pool)
-        .await
+pub(crate) async fn verifier_by_id(
+    connection: &Connection,
+    id: u32,
+    password: String
+) -> Result<u64, Error> {
+    connection.execute(
+        "SELECT 1 FROM users WHERE id = ? AND password = ?",
+        params!(id, password)
+    ).await
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::database::initialize_database;
-    use super::*;
-
-    #[actix_web::test]
-    async fn lifetime() {
-        let pool = initialize_database().await;
-
-        if let Err(error) = creator(&pool, &"TestName".to_string(), &"TestPassword".to_string()).await {
-            panic!("{}", error);
-        }
-
-        is_exact_test(getter(&pool, 1).await);
-        is_exact_test(finder(&pool, &"TestName".to_string()).await);
-
-        if let Err(error) = updater(&pool, 1, &"UpdatedName".to_string(), &"UpdatedPassword".to_string()).await {
-            panic!("{}", error);
-        }
-
-        is_exact_updated(getter(&pool, 1).await);
-        is_exact_updated(finder(&pool, &"UpdatedName".to_string()).await);
-
-        if let Err(error) = deleter(&pool, 1).await {
-            panic!("{}", error);
-        }
-
-        if let Ok(user) = getter(&pool, 1).await {
-            panic!("{:?}", user)
-        }
-    }
-
-    fn is_exact_test(from: Result<User, sqlx::Error>) {
-        match from {
-            Ok(user) => {
-                assert_eq!(user.id, 1);
-                assert_eq!(user.name, "TestName".to_string());
-                assert_eq!(user.password, "TestPassword".to_string());
-            },
-            Err(error) => panic!("{}", error),
-        }
-    }
-    
-    fn is_exact_updated(from: Result<User, sqlx::Error>) {
-        match from {
-            Ok(user) => {
-                assert_eq!(user.id, 1);
-                assert_eq!(user.name, "UpdatedName".to_string());
-                assert_eq!(user.password, "UpdatedPassword".to_string());
-            },
-            Err(error) => panic!("{}", error),
-        }
-    }
+pub(crate) async fn verifier_by_name<U: FromRow>(
+    connection: &Connection,
+    name: String,
+    password: String
+) -> Result<U, Error> {
+    U::from_option_row(
+        connection.query(
+            "SELECT id FROM users WHERE name = ? AND password = ?",
+            params!(name, password)
+        ).await?.next().await?
+    )
 }

@@ -40,45 +40,18 @@
 </body>
 
 <script src="/static/js/cookies.min.js"></script>
+<script src="/static/js/general_fetch.min.js"></script>
 <script>
     function login() {
-        fetch("/user", {
-            method: "POST",
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                user: {
-                    id: 0,
-                    name: document.getElementById("name").value,
-                    password: document.getElementById("password").value,
-                    articles: []
-                },
-                article: {
-                    id: 0,
-                    title: "",
-                    body: "",
-                    creator: 0
-                }
-            }),
-        })
-            .then(response => {
-                if(!response.ok) {
-                    document.getElementById("error").show();
-                }
-                return response.json();
-            })
-            .then(data => {
-                setCookie("id", data["id"], 604800);
-                setCookie("name", data["name"], 604800);
-                setCookie("logged", "true");
-                document.location.href = "/";
-            })
-            .catch(error => {
-                if (error !== undefined) {
-                    console.error(error);
-                }
-            })
+        general_fetch("/user", data => {
+            setCookie("id", data["id"], 604800);
+            setCookie("name", document.getElementById("name").value, 604800);
+            setCookie("logged", "true");
+            document.location.href = "/";
+        }, "POST", JSON.stringify({
+            name: document.getElementById("name").value,
+            password: document.getElementById("password").value
+        }));
     }
 </script>
 </html>
